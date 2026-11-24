@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Neon Harbor — an open-world harbor crime game</title>
+<link rel="icon" href="data:,">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#0b0e18; }
+  body { font-family:"Segoe UI", Verdana, system-ui, sans-serif; color:#f2f4f8; }
+  #game-canvas { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  .panel { background:rgba(9,12,22,.74); border:1px solid rgba(255,255,255,.16); border-radius:10px; backdrop-filter:blur(3px); box-shadow:0 4px 24px rgba(0,0,0,.45); }
+  /* ---------- HUD frame ---------- */
+  #hud { position:fixed; inset:0; pointer-events:none; z-index:5; }
+  #mission-card { position:absolute; top:14px; left:14px; width:342px; max-width:44vw; padding:10px 12px; }
+  #mc-title { font-size:13px; font-weight:800; letter-spacing:1.2px; color:#ffd23e; }
+  #mc-segs { display:flex; align-items:center; gap:4px; margin:7px 0 6px; }
+  #mc-segs .seg { height:6px; flex:1; border-radius:3px; background:rgba(255,255,255,.18); }
+  #mc-segs .seg.done { background:#ffd23e; }
+  #mc-segs .stagetext { font-size:10px; letter-spacing:1px; color:#ffd23e; margin-left:6px; white-space:nowrap; }
+  #mc-obj { font-size:14.5px; font-weight:650; line-height:1.3; }
+  #mc-next { font-size:11.5px; color:#9fd8e8; margin-top:3px; }
+  #crew { position:absolute; top:178px; left:14px; width:218px; display:flex; flex-direction:column; gap:6px; }
+  .ccard { padding:6px 9px; border-radius:8px; background:rgba(9,12,22,.66); border:1px solid rgba(255,255,255,.13); }
+  .ccard.flash { border-color:#14f2d8; box-shadow:0 0 12px rgba(20,242,216,.5); }
+  .cname { font-size:11px; font-weight:800; letter-spacing:.8px; }
+  .cname span { color:#9fb4c8; font-weight:600; }
+  .cability { font-size:10.5px; color:#ffd23e; letter-spacing:.6px; }
+  .ckey { background:rgba(255,255,255,.16); border-radius:4px; padding:0 5px; color:#fff; }
+  .ccd { font-size:10px; color:#8fa8bd; }
+  .ccd.ready { color:#37e08b; font-weight:700; }
+  #bottom-left { position:absolute; left:14px; bottom:14px; width:300px; max-width:46vw; }
+  #health-wrap, #bust-wrap { height:13px; border-radius:6px; background:rgba(255,255,255,.14); overflow:hidden; margin-bottom:5px; }
+  #health-fill { height:100%; background:#37e08b; transition:width .15s; }
+  #bust-fill { height:100%; background:#ff9a2a; transition:width .15s; }
+  #bust-wrap { height:9px; }
+  .bar-label { font-size:9.5px; letter-spacing:1.4px; color:#cfe3ef; margin-bottom:2px; }
+  #weapons { display:flex; gap:6px; margin-top:7px; }
+  .wslot { flex:1; padding:5px 7px; border-radius:8px; background:rgba(9,12,22,.66); border:1px solid rgba(255,255,255,.14); position:relative; }
+  .wslot.active { border-color:#ffd23e; background:rgba(60,44,4,.72); }
+  .wkey { position:absolute; top:3px; right:6px; font-size:9px; color:#9fb4c8; }
+  .wname { font-size:11px; font-weight:800; letter-spacing:.7px; }
+  .wammo { font-size:11px; color:#ffd23e; }
+  #top-right { position:absolute; top:14px; right:14px; width:252px; max-width:44vw; padding:9px 12px; text-align:right; }
+  #cash { font-size:24px; font-weight:800; color:#37e08b; letter-spacing:.5px; }
+  #clock { font-size:12.5px; color:#cfe3ef; letter-spacing:1.5px; }
+  #stars { font-size:19px; color:#ffd23e; letter-spacing:2px; line-height:1.1; }
+  #stars .dim { color:rgba(255,255,255,.16); }
+  #stars.hot { animation:pulse .5s infinite alternate; }
+  @keyframes pulse { from { opacity:1; } to { opacity:.45; } }
+  #respect-wrap { height:7px; border-radius:4px; background:rgba(255,255,255,.14); overflow:hidden; margin-top:5px; }
+  #respect-fill { height:100%; background:linear-gradient(90deg,#ff5fa2,#b46bff); }
+  #rank-name { font-size:10.5px; letter-spacing:1.6px; color:#ff9ecf; margin-top:3px; }
+  #shells { font-size:11px; color:#9fd8e8; margin-top:3px; letter-spacing:.8px; }
+  #dispatch { position:absolute; top:178px; right:14px; width:252px; max-width:44vw; padding:8px 11px; }
+  #dispatch .dhead { font-size:10.5px; font-weight:800; letter-spacing:1.6px; color:#ff7a6b; margin-bottom:5px; }
+  .drow { display:flex; justify-content:space-between; font-size:11.5px; padding:2px 0; }
+  .dcall { font-weight:700; color:#fff; }
+  .drole { color:#ffb36b; letter-spacing:.5px; }
+  .ddist { color:#9fd8e8; }
+  #bottom-right { position:absolute; right:14px; bottom:14px; width:216px; }
+  #radio { font-size:11px; color:#4be1ff; padding:4px 8px; margin-bottom:6px; white-space:nowrap; overflow:hidden; }
+  #veh { padding:7px 11px; margin-bottom:6px; display:flex; align-items:center; gap:10px; }
+  #veh-speed { font-size:30px; font-weight:800; line-height:1; }
+  #veh .unit { font-size:10px; color:#9fb4c8; letter-spacing:1px; }
+  #veh-model { font-size:11px; font-weight:700; letter-spacing:.8px; color:#ffd23e; }
+  #veh-cond-wrap { height:6px; border-radius:3px; background:rgba(255,255,255,.15); overflow:hidden; margin-top:3px; width:92px; }
+  #veh-cond { height:100%; background:#37e08b; }
+  #minimap { width:216px; height:196px; border-radius:10px; border:1px solid rgba(255,255,255,.2); display:block; background:#0d1522; }
+  #dialogue { position:absolute; left:50%; bottom:118px; transform:translateX(-50%); width:560px; max-width:78vw; display:flex; gap:11px; padding:10px 13px; align-items:center; }
+  #dlg-portrait { width:42px; height:42px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center; font-size:19px; font-weight:800; color:#10131c; }
+  #dlg-name { font-size:11px; font-weight:800; letter-spacing:1.2px; }
+  #dlg-line { font-size:14.5px; line-height:1.35; }
+  #banner { position:absolute; top:64px; left:50%; transform:translateX(-50%); text-align:center; padding:9px 26px; }
+  #banner-title { font-size:21px; font-weight:800; letter-spacing:2.5px; color:#ffd23e; }
+  #banner-sub { font-size:12.5px; color:#e8f2f8; }
+  #prompt { position:absolute; left:50%; bottom:66px; transform:translateX(-50%); font-size:13.5px; padding:6px 16px; border-radius:16px; background:rgba(9,12,22,.72); border:1px solid rgba(255,255,255,.18); white-space:nowrap; }
+  #crosshair { position:absolute; left:50%; top:50%; width:6px; height:6px; margin:-3px; border-radius:50%; background:rgba(255,255,255,.9); box-shadow:0 0 6px rgba(0,0,0,.8); }
+  #hurt { position:fixed; inset:0; pointer-events:none; z-index:6; opacity:0; background:radial-gradient(ellipse at center, transparent 52%, rgba(200,20,20,.5) 100%); }
+  /* ---------- Screens ---------- */
+  .screen { position:fixed; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; }
+  #menu { background:linear-gradient(90deg, rgba(5,7,14,.88) 0%, rgba(5,7,14,.55) 46%, rgba(5,7,14,.05) 78%); justify-content:flex-start; }
+  .menu-inner { margin-left:6vw; width:430px; max-width:88vw; }
+  .game-logo { font-size:58px; font-weight:900; letter-spacing:1px; line-height:.95; background:linear-gradient(92deg,#14f2d8 10%,#4be1ff 40%,#ff5fa2 90%); -webkit-background-clip:text; background-clip:text; color:transparent; text-shadow:0 0 34px rgba(255,95,162,.25); }
+  .tagline { font-size:14px; color:#ffd23e; letter-spacing:2.6px; margin:6px 0 12px; }
+  .story { font-size:13.5px; line-height:1.5; color:#d7e5ef; margin-bottom:16px; }
+  .menubtn { display:block; width:250px; text-align:left; margin:6px 0; padding:10px 16px; font-size:15px; font-weight:700; letter-spacing:1.4px; color:#f2f4f8; background:rgba(16,22,38,.85); border:1px solid rgba(255,255,255,.22); border-radius:8px; cursor:pointer; pointer-events:auto; }
+  .menubtn:hover { border-color:#14f2d8; color:#14f2d8; }
+  .menubtn:disabled { opacity:.35; cursor:default; }
+  .subpanel { display:none; width:400px; max-width:88vw; margin-top:8px; padding:11px 13px; }
+  .subpanel.open { display:block; }
+  .panel-title { font-size:11px; font-weight:800; letter-spacing:1.8px; color:#ffd23e; margin-bottom:7px; }
+  .slotrow { display:block; width:100%; text-align:left; margin:4px 0; padding:7px 10px; font-size:12px; color:#e8f2f8; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.14); border-radius:6px; cursor:pointer; pointer-events:auto; }
+  .slotrow.empty { color:#7e93a8; cursor:default; }
+  .slotrow span { float:right; color:#9fb4c8; }
+  .setrow { display:flex; justify-content:space-between; align-items:center; font-size:12.5px; margin:7px 0; gap:12px; }
+  .setrow select, .setrow input[type="range"] { width:150px; pointer-events:auto; }
+  .controls { margin-top:16px; font-size:11.5px; color:#9fb4c8; line-height:1.65; }
+  .controls b { color:#e8f2f8; }
+  #pause, #over { background:rgba(4,6,12,.62); }
+  .centerbox { text-align:center; padding:30px 44px; }
+  .centerbox h2 { font-size:40px; letter-spacing:4px; margin-bottom:8px; }
+  #over-title { color:#ff5a4b; }
+  .centerbox p { color:#cfe3ef; font-size:14px; margin-bottom:18px; }
+  .centerbox .menubtn { margin:6px auto; text-align:center; }
+  #mapscreen { background:rgba(4,6,12,.9); }
+  .map-inner { display:flex; gap:18px; align-items:flex-start; }
+  #bigmap { border-radius:10px; border:1px solid rgba(255,255,255,.25); height:84vh; max-width:70vw; }
+  #map-side { width:240px; padding:14px 16px; }
+  #map-side h3 { letter-spacing:2px; font-size:15px; color:#ffd23e; margin-bottom:10px; }
+  #map-stats div { font-size:12.5px; color:#9fb4c8; margin:6px 0; letter-spacing:.6px; }
+  #map-stats b { color:#fff; float:right; }
+  .maphint { font-size:11px; color:#7e93a8; margin-top:12px; line-height:1.6; }
+  /* ---------- Touch controls ---------- */
+  #touch-ui { position:fixed; inset:0; z-index:8; pointer-events:none; display:none; }
+  body.touch #touch-ui { display:block; }
+  body.touch #crew { display:none; }
+  #joy-base { position:absolute; left:26px; bottom:90px; width:118px; height:118px; border-radius:50%; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.25); pointer-events:auto; }
+  #joy-stick { position:absolute; left:50%; top:50%; width:52px; height:52px; margin:-26px; border-radius:50%; background:rgba(255,255,255,.35); border:1px solid rgba(255,255,255,.5); }
+  .tbtn { position:absolute; width:62px; height:62px; border-radius:50%; background:rgba(9,12,22,.6); border:1px solid rgba(255,255,255,.35); color:#fff; font-size:11px; font-weight:800; letter-spacing:.6px; pointer-events:auto; display:flex; align-items:center; justify-content:center; }
+  .tbtn:active { background:rgba(255,210,62,.5); }
+  #btn-fire { right:26px; bottom:96px; width:74px; height:74px; }
+  #btn-act { right:112px; bottom:66px; }
+  #btn-jump { right:30px; bottom:186px; }
+  #btn-pause-t { right:14px; top:120px; width:44px; height:44px; font-size:14px; }
+  @media (max-width:760px) {
+    #mission-card { width:250px; } #mc-obj { font-size:12px; }
+    #top-right { width:170px; } #cash { font-size:18px; }
+    #dispatch { display:none !important; }
+    #bottom-right { width:120px; } #minimap { width:120px; height:110px; }
+    #bottom-left { width:190px; } .wname { font-size:9px; }
+    #dialogue { bottom:190px; }
+    .game-logo { font-size:40px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="game-canvas"></canvas>
+
+<div id="hud" style="display:none">
+  <div id="mission-card" class="panel">
+    <div id="mc-title">MISSION 1 — WARM WELCOME</div>
+    <div id="mc-segs"></div>
+    <div id="mc-obj">Meet Marisol at the Seaside Diner</div>
+    <div id="mc-next"></div>
+  </div>
+
+  <div id="crew"></div>
+
+  <div id="bottom-left">
+    <div class="bar-label">HEALTH</div>
+    <div id="health-wrap"><div id="health-fill"></div></div>
+    <div id="bust-wrap" style="display:none"><div id="bust-fill"></div></div>
+    <div id="weapons"></div>
+  </div>
+
+  <div id="top-right" class="panel">
+    <div id="cash">$0</div>
+    <div id="clock">17:42</div>
+    <div id="stars"></div>
+    <div id="respect-wrap"><div id="respect-fill"></div></div>
+    <div id="rank-name">ERRAND RUNNER</div>
+    <div id="shells">🐚 0 / 12 SHELLS</div>
+  </div>
+
+  <div id="dispatch" class="panel" style="display:none">
+    <div class="dhead">◉ NHPD DISPATCH — PURSUIT</div>
+    <div id="dispatch-rows"></div>
+  </div>
+
+  <div id="bottom-right">
+    <div id="radio" class="panel" style="display:none"></div>
+    <div id="veh" class="panel" style="display:none">
+      <div>
+        <div id="veh-speed">0</div>
+        <div class="unit">KM/H</div>
+      </div>
+      <div>
+        <div id="veh-model">SEDAN</div>
+        <div class="unit">CONDITION</div>
+        <div id="veh-cond-wrap"><div id="veh-cond"></div></div>
+      </div>
+    </div>
+    <canvas id="minimap" width="216" height="196"></canvas>
+  </div>
+
+  <div id="dialogue" class="panel" style="display:none">
+    <div id="dlg-portrait">M</div>
+    <div>
+      <div id="dlg-name">MARISOL VEGA — FIXER</div>
+      <div id="dlg-line"></div>
+    </div>
+  </div>
+
+  <div id="banner" class="panel" style="display:none">
+    <div id="banner-title"></div>
+    <div id="banner-sub"></div>
+  </div>
+
+  <div id="prompt" style="display:none"></div>
+  <div id="crosshair" style="display:none"></div>
+</div>
+<div id="hurt"></div>
+
+<div id="touch-ui">
+  <div id="joy-base"><div id="joy-stick"></div></div>
+  <div class="tbtn" id="btn-fire">FIRE</div>
+  <div class="tbtn" id="btn-act">E</div>
+  <div class="tbtn" id="btn-jump">JUMP</div>
+  <div class="tbtn" id="btn-pause-t">II</div>
+</div>
+
+<div id="menu" class="screen">
+  <div class="menu-inner">
+    <div class="game-logo">NEON<br>HARBOR</div>
+    <div class="tagline">ONE HARBOR · ONE FIXER · NO WAY BACK</div>
+    <p class="story">Rio drives for Marisol Vega, the fixer who owns half the docks and all of
+    his debts. Three jobs stand between him and a clean slate — if the Neon Harbor PD
+    doesn't collect him first.</p>
+    <button class="menubtn" id="btn-continue">CONTINUE</button>
+    <button class="menubtn" id="btn-new">NEW GAME</button>
+    <button class="menubtn" id="btn-load">LOAD GAME</button>
+    <button class="menubtn" id="btn-settings">SETTINGS</button>
+    <div id="load-panel" class="subpanel panel"></div>
+    <div id="settings-panel" class="subpanel panel">
+      <div class="panel-title">SETTINGS</div>
+      <div class="setrow"><span>Graphics quality</span>
+        <select id="set-quality"><option value="high">High</option><option value="low">Low</option></select></div>
+      <div class="setrow"><span>Volume</span><input type="range" id="set-volume" min="0" max="100" value="80"></div>
+      <div class="setrow"><span>Mouse sensitivity</span><input type="range" id="set-sens" min="0.4" max="2" step="0.1" value="1"></div>
+    </div>
+    <div class="controls">
+      <b>WASD</b> move / drive · <b>Mouse</b> look · <b>Click</b> shoot · <b>1–4</b> weapons ·
+      <b>E</b> enter/exit car · <b>Shift</b> sprint · <b>Space</b> jump / handbrake ·
+      <b>Q / X / C</b> crew abilities · <b>R</b> radio · <b>M</b> map · <b>Esc</b> pause
+    </div>
+  </div>
+</div>
+
+<div id="pause" class="screen" style="display:none">
+  <div class="centerbox panel">
+    <h2>PAUSED</h2>
+    <p>Neon Harbor holds its breath.</p>
+    <button class="menubtn" id="btn-resume">RESUME</button>
+    <button class="menubtn" id="btn-save">SAVE GAME</button>
+    <button class="menubtn" id="btn-quit">QUIT TO TITLE</button>
+  </div>
+</div>
+
+<div id="mapscreen" class="screen" style="display:none">
+  <div class="map-inner">
+    <canvas id="bigmap" width="880" height="800"></canvas>
+    <div id="map-side" class="panel">
+      <h3>NEON HARBOR</h3>
+      <div id="map-stats"></div>
+      <div class="maphint">Gold diamond — your objective.<br>Red/blue — NHPD units. White — air unit.<br>Cyan arrow — you.<br><br>Press M or Esc to close.</div>
+    </div>
+  </div>
+</div>
+
+<div id="over" class="screen" style="display:none">
+  <div class="centerbox panel">
+    <h2 id="over-title">WASTED</h2>
+    <p id="over-sub"></p>
+    <button class="menubtn" id="btn-respawn">BACK ON THE STREET</button>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
